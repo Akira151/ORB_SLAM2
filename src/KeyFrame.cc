@@ -41,7 +41,7 @@ KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
     mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
     mnMaxY(F.mnMaxY), mK(F.mK), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
     mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mbNotErase(false),
-    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap)
+    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), mMaxDepth(F.mMaxDepth)
 {
     mnId=nNextId++;
 
@@ -131,13 +131,13 @@ void KeyFrame::AddConnection(KeyFrame *pKF, const int &weight)
         else
             return;
     }
-
     UpdateBestCovisibles();
 }
 
 void KeyFrame::UpdateBestCovisibles()
 {
     unique_lock<mutex> lock(mMutexConnections);
+
     vector<pair<int,KeyFrame*> > vPairs;
     vPairs.reserve(mConnectedKeyFrameWeights.size());
     for(map<KeyFrame*,int>::iterator mit=mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
@@ -476,7 +476,6 @@ void KeyFrame::SetBadFlag()
         mConnectedKeyFrameWeights.clear();
         mvpOrderedConnectedKeyFrames.clear();
 
-        // Update Spanning Tree
         set<KeyFrame*> sParentCandidates;
         sParentCandidates.insert(mpParent);
 
@@ -561,7 +560,6 @@ void KeyFrame::EraseConnection(KeyFrame* pKF)
             bUpdate=true;
         }
     }
-
     if(bUpdate)
         UpdateBestCovisibles();
 }

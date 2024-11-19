@@ -53,6 +53,7 @@
 *
 */
 
+#include <iostream>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -105,6 +106,7 @@ static float IC_Angle(const Mat& image, Point2f pt,  const vector<int> & u_max)
 
 
 const float factorPI = (float)(CV_PI/180.f);
+
 static void computeOrbDescriptor(const KeyPoint& kpt,
                                  const Mat& img, const Point* pattern,
                                  uchar* desc)
@@ -124,9 +126,9 @@ static void computeOrbDescriptor(const KeyPoint& kpt,
     {
         int t0, t1, val;
         t0 = GET_VALUE(0); t1 = GET_VALUE(1);
-        val = t0 < t1;
+        val = t0 < t1; // 描述子本字节的bit0
         t0 = GET_VALUE(2); t1 = GET_VALUE(3);
-        val |= (t0 < t1) << 1;
+        val |= (t0 < t1) << 1; // 描述子本字节的bit1
         t0 = GET_VALUE(4); t1 = GET_VALUE(5);
         val |= (t0 < t1) << 2;
         t0 = GET_VALUE(6); t1 = GET_VALUE(7);
@@ -408,9 +410,13 @@ static int bit_pattern_31_[256*4] =
 };
 
 ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
-         int _iniThFAST, int _minThFAST):
-    nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
-    iniThFAST(_iniThFAST), minThFAST(_minThFAST)
+         int _iniThFAST, int _minThFAST, float _minMaskValue):
+    nfeatures(_nfeatures), 
+    scaleFactor(_scaleFactor), 
+    nlevels(_nlevels),
+    iniThFAST(_iniThFAST),
+    minThFAST(_minThFAST),
+    minMaskValue(_minMaskValue)
 {
     mvScaleFactor.resize(nlevels);
     mvLevelSigma2.resize(nlevels);
@@ -456,10 +462,10 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
     int v, v0, vmax = cvFloor(HALF_PATCH_SIZE * sqrt(2.f) / 2 + 1);
     int vmin = cvCeil(HALF_PATCH_SIZE * sqrt(2.f) / 2);
     const double hp2 = HALF_PATCH_SIZE*HALF_PATCH_SIZE;
+
     for (v = 0; v <= vmax; ++v)
         umax[v] = cvRound(sqrt(hp2 - v * v));
 
-    // Make sure we are symmetric
     for (v = HALF_PATCH_SIZE, v0 = 0; v >= vmin; --v)
     {
         while (umax[v0] == umax[v0 + 1])
@@ -781,7 +787,7 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
         const float width = (maxBorderX-minBorderX);
         const float height = (maxBorderY-minBorderY);
 
-        const int nCols = width/W;
+        const int nCols = width/W; 
         const int nRows = height/W;
         const int wCell = ceil(width/nCols);
         const int hCell = ceil(height/nRows);
@@ -804,7 +810,7 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
                     continue;
                 if(maxX>maxBorderX)
                     maxX = maxBorderX;
-
+                
                 vector<cv::KeyPoint> vKeysCell;
                 FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
                      vKeysCell,iniThFAST,true);
@@ -830,7 +836,7 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
 
         vector<KeyPoint> & keypoints = allKeypoints[level];
         keypoints.reserve(nfeatures);
-
+        
         keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
                                       minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
 
@@ -848,6 +854,98 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
     }
 
     // compute orientations
+    for (int level = 0; level < nlevels; ++level)
+        computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
+}
+
+// Plus: 
+//[151] 图像金字塔？筛选特征点的地方。如果这里加一个对mask的判断的话，就可以对特征点进行控制。
+void ORBextractor::ComputeKeyPointsOctTree_GSD(vector<vector<KeyPoint> >& allKeypoints, Mat& _glass_mask)
+{
+    allKeypoints.resize(nlevels);
+
+    const float W = 30;
+
+    for (int level = 0; level < nlevels; ++level)
+    {
+        const int minBorderX = EDGE_THRESHOLD-3;
+        const int minBorderY = minBorderX;
+        const int maxBorderX = mvImagePyramid[level].cols-EDGE_THRESHOLD+3;
+        const int maxBorderY = mvImagePyramid[level].rows-EDGE_THRESHOLD+3;
+
+        vector<cv::KeyPoint> vToDistributeKeys;
+        vToDistributeKeys.reserve(nfeatures*10);
+
+        const float width = (maxBorderX-minBorderX);
+        const float height = (maxBorderY-minBorderY);
+
+        const int nCols = width/W; 
+        const int nRows = height/W;
+        const int wCell = ceil(width/nCols);
+        const int hCell = ceil(height/nRows);
+
+        for(int i=0; i<nRows; i++)
+        {
+            const float iniY =minBorderY+i*hCell;
+            float maxY = iniY+hCell+6;
+
+            if(iniY>=maxBorderY-3)
+                continue;
+            if(maxY>maxBorderY)
+                maxY = maxBorderY;
+
+            for(int j=0; j<nCols; j++)
+            {
+                const float iniX =minBorderX+j*wCell;
+                float maxX = iniX+wCell+6;
+                if(iniX>=maxBorderX-6)
+                    continue;
+                if(maxX>maxBorderX)
+                    maxX = maxBorderX;
+                
+                vector<cv::KeyPoint> vKeysCell;
+                FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
+                     vKeysCell,iniThFAST,true);
+
+                if(vKeysCell.empty())
+                {
+                    FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
+                         vKeysCell,minThFAST,true);
+                }
+
+                if(!vKeysCell.empty())
+                {
+                    for(vector<cv::KeyPoint>::iterator vit=vKeysCell.begin(); vit!=vKeysCell.end();vit++)
+                    {
+                        (*vit).pt.x+=j*wCell;
+                        (*vit).pt.y+=i*hCell;
+                        // if(_glass_mask.at<uchar>((*vit).pt.y, (*vit).pt.x) < minMaskValue)
+                        vToDistributeKeys.push_back(*vit);
+                    }
+                }
+
+            }
+        }
+
+        vector<KeyPoint> & keypoints = allKeypoints[level];
+        keypoints.reserve(nfeatures);
+        
+        keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
+                                      minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
+
+        const int scaledPatchSize = PATCH_SIZE*mvScaleFactor[level];
+
+        const int nkps = keypoints.size();
+        for(int i=0; i<nkps ; i++)
+        {
+            keypoints[i].pt.x+=minBorderX;
+            keypoints[i].pt.y+=minBorderY;
+            keypoints[i].octave=level;
+            keypoints[i].size = scaledPatchSize;
+        }
+    }
+
+    // Step3. 计算每个特征点的方向
     for (int level = 0; level < nlevels; ++level)
         computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
 }
@@ -1083,6 +1181,7 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 
         // preprocess the resized image
         Mat workingMat = mvImagePyramid[level].clone();
+
         GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
 
         // Compute the descriptors
@@ -1102,6 +1201,128 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
         // And add the keypoints to the output
         _keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
     }
+}
+
+void ORBextractor::operator()( InputArray _image, Mat _glass_mask, InputArray _mask, vector<KeyPoint>& _keypoints,
+                      OutputArray _descriptors)
+{ 
+    if(_image.empty())
+        return;
+
+    Mat image = _image.getMat();
+    assert(image.type() == CV_8UC1 );
+
+    // Pre-compute the scale pyramid
+    ComputePyramid(image);
+
+    vector < vector<KeyPoint> > allKeypoints;
+    // ComputeKeyPointsOctTree_GSD(allKeypoints, _glass_mask);
+    ComputeKeyPointsOld(allKeypoints);
+
+    Mat descriptors;
+
+    int nkeypoints = 0;
+    for (int level = 0; level < nlevels; ++level)
+        nkeypoints += (int)allKeypoints[level].size();
+    if( nkeypoints == 0 )
+        _descriptors.release();
+    else
+    {
+        _descriptors.create(nkeypoints, 32, CV_8U);
+        descriptors = _descriptors.getMat();
+    }
+
+    _keypoints.clear();
+    _keypoints.reserve(nkeypoints);
+    // std::cout << _keypoints.size() << ' ' << nkeypoints << endl;
+
+    int offset = 0;
+    for (int level = 0; level < nlevels; ++level)
+    {
+        vector<KeyPoint>& keypoints = allKeypoints[level];
+        int nkeypointsLevel = (int)keypoints.size();
+
+        if(nkeypointsLevel==0)
+            continue;
+
+        // preprocess the resized image
+        Mat workingMat = mvImagePyramid[level].clone();
+
+        GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
+
+        // Compute the descriptors
+        Mat desc = descriptors.rowRange(offset, offset + nkeypointsLevel);
+        computeDescriptors(workingMat, keypoints, desc, pattern);
+
+        offset += nkeypointsLevel;
+
+        // Plus
+        // vector<KeyPoint> keypoints_outglass;
+        // std::cout << _keypoints.size() << endl;
+
+        // Scale keypoint coordinates
+        if (level != 0)
+        {
+            float scale = mvScaleFactor[level]; //getScale(level, firstLevel, scaleFactor);
+            for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
+                 keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint)
+            {
+                keypoint->pt *= scale;
+                if (_glass_mask.at<uchar>(keypoint->pt.y, keypoint->pt.x) >= minMaskValue)
+                    keypoint->class_id = 0;
+            }
+        }
+        else
+        {
+            for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
+                 keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint)
+            {
+                if (_glass_mask.at<uchar>(keypoint->pt.y, keypoint->pt.x) >= minMaskValue)
+                    keypoint->class_id = 0;
+            }
+        }
+        // And add the keypoints to the output
+
+        _keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
+    }
+
+    // ComputeKeyPointsGlass(_keypoints, _glass_mask);
+    // std::cout << _keypoints.size() << endl;
+}
+
+void ORBextractor::ComputeKeyPointsGlass(vector<KeyPoint>& _keypoints, Mat& _glass_mask)
+{
+    int n = _keypoints.size();
+    Mat glass_mask = _glass_mask.clone();
+
+    for (int i = 0; i < n; i++)
+    {
+        float x = _keypoints[i].pt.x;
+        float y = _keypoints[i].pt.y;
+
+        float mask_value = glass_mask.at<uchar>(y, x);
+        // float mask_value = FloatPointsInterpolate<uchar>(glass_mask, x, y);
+        
+        if (mask_value >= minMaskValue)
+            _keypoints[i].class_id = 0;
+    }
+}
+
+template <typename Type>
+float ORBextractor::FloatPointsInterpolate(Mat& image, float x, float y)
+{
+    int x_int = (int)std::floor(x);
+    int y_int = (int)std::floor(y);
+
+    float x_weight = x - x_int;
+    float y_weight = y - y_int;
+
+    float mask_value = (image.at<Type>(y_int, x_int) * (2 - x_weight - y_weight) + 
+                        image.at<Type>(y_int, x_int + 1) * (1 + x_weight - y_weight) + 
+                        image.at<Type>(y_int + 1, x_int) * (1 - x_weight + y_weight) + 
+                        image.at<Type>(y_int + 1, x_int + 1) * (x_weight + y_weight)) / 4;
+
+    return mask_value;
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image)

@@ -68,3 +68,23 @@ Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
 Viewer.ViewpointF: 500
 
+#--------------------------------------------------------------------------------------------
+# 稠密点云地图参数
+#--------------------------------------------------------------------------------------------
+PointCloudMapping.Resolution: 0.01
+
+#--------------------------------------------------------------------------------------------
+# 玻璃检测阈值参数
+#--------------------------------------------------------------------------------------------
+GSD.ORBMinMaskValue: 250
+GSD.ORBMaxMaskValue: 5.0
+GSD.ORBDepthGapRange: 0.3
+GSD.ORBMaxDepthWeightAll: 5.0
+GSD.ORBMaxDepthWeightGlass: 1.0
+
+GSD.PCMMinMaskValue: 127.5
+GSD.PCMMaxMaskValue: 5.0
+GSD.PCMPixelRange: 2
+GSD.PCMDepthGapRangeXY: 0.1
+GSD.PCMDepthGapRangeGlass: 0.1
+GSD.PCMMaxDepthWeight: 2.0

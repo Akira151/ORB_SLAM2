@@ -54,11 +54,18 @@ public:
     // Constructor for RGB-D cameras.
     Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
+    // Plus: Constructor for RGB-D cameras and mask images.
+    Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imMask, const cv::Mat &imDepthGS, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, 
+          const float &minMaskValue, const float &maxMaskValue, const float &depthGapRange, const float &maxDepthWeightAll, const float &maxDepthWeightGlass);
+
     // Constructor for Monocular cameras.
     Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im);
+
+    // Plus
+    void ExtractORB_GSD(int flag, const cv::Mat &im, const cv::Mat &gm);
 
     // Compute Bag of Words representation.
     void ComputeBoW();
@@ -95,6 +102,11 @@ public:
     // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
     void ComputeStereoFromRGBD(const cv::Mat &imDepth);
 
+    // Plus
+    void ComputeStereoFromRGBD_GSD(const cv::Mat &imDepth, const cv::Mat &imMask, const cv::Mat &imDepthGS);
+    float ComputeGlassPointsDepth(const cv::Mat &imDepth, const cv::Mat &imDepthGS, const int &u, const int &v);
+    float ComputeAverageDepth(const cv::Mat &imDepth, const cv::Mat &imMask);
+
     // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
     cv::Mat UnprojectStereo(const int &i);
 
@@ -102,63 +114,89 @@ public:
     // Vocabulary used for relocalization.
     ORBVocabulary* mpORBvocabulary;
 
-    // Feature extractor. The right is used only in the stereo case.
-    ORBextractor* mpORBextractorLeft, *mpORBextractorRight;
-
     // Frame timestamp.
     double mTimeStamp;
 
     // Calibration matrix and OpenCV distortion parameters.
-    cv::Mat mK;
+    //---------------------------------------------------------------------------------------------
+    static bool mbInitialComputations; 
+
+    cv::Mat mK; 
     static float fx;
     static float fy;
     static float cx;
     static float cy;
     static float invfx;
     static float invfy;
-    cv::Mat mDistCoef;
+    cv::Mat mDistCoef; 
 
     // Stereo baseline multiplied by fx.
-    float mbf;
-
+    float mbf; 
     // Stereo baseline in meters.
-    float mb;
+    float mb; 
+    //---------------------------------------------------------------------------------------------
+
+
+    //---------------------------------------------------------------------------------------------
+    // Number of KeyPoints.
+    int N; 
+
+    // Feature extractor. The right is used only in the stereo case.
+    ORBextractor* mpORBextractorLeft, *mpORBextractorRight;
+
+    // ORB descriptor, each row associated to a keypoint.
+    cv::Mat mDescriptors, mDescriptorsRight; 
+
+    // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
+    // In the stereo case, mvKeysUn is redundant as images must be rectified.
+    // In the RGB-D case, RGB images can be distorted.
+    std::vector<cv::KeyPoint> mvKeys, mvKeysRight; 
+    std::vector<cv::KeyPoint> mvKeysUn; 
+
+    // Corresponding stereo coordinate and depth for each keypoint.
+    // "Monocular" keypoints have a negative value.
+    std::vector<float> mvuRight; 
+    std::vector<float> mvDepth; 
 
     // Threshold close/far points. Close points are inserted from 1 view.
     // Far points are inserted as in the monocular case from 2 views.
     float mThDepth;
 
-    // Number of KeyPoints.
-    int N;
+    float mMinMaskValue; 
+    float mMaxMaskValue; 
+    float mdepthGapRange; 
+    float mMaxDepth; 
+    float mMaxDepthWeightAll; 
+    float mMaxDepthWeightGlass; 
+    //---------------------------------------------------------------------------------------------
 
-    // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
-    // In the stereo case, mvKeysUn is redundant as images must be rectified.
-    // In the RGB-D case, RGB images can be distorted.
-    std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
-    std::vector<cv::KeyPoint> mvKeysUn;
+    //---------------------------------------------------------------------------------------------
+    // Undistorted Image Bounds (computed once).
+    // 畸变矫正后的图像边界
+    static float mnMinX;
+    static float mnMaxX;
+    static float mnMinY;
+    static float mnMaxY;
+    //---------------------------------------------------------------------------------------------
 
-    // Corresponding stereo coordinate and depth for each keypoint.
-    // "Monocular" keypoints have a negative value.
-    std::vector<float> mvuRight;
-    std::vector<float> mvDepth;
+    //---------------------------------------------------------------------------------------------
+    // Keypoints are assigned to cells in a grid to reduce matching complexity when projecting MapPoints.
+    static float mfGridElementWidthInv;
+    static float mfGridElementHeightInv;
+
+    std::vector<std::size_t> mGrid[FRAME_GRID_COLS][FRAME_GRID_ROWS]; // 每个网格内特征点编号列表
+    //---------------------------------------------------------------------------------------------
+
 
     // Bag of Words Vector structures.
     DBoW2::BowVector mBowVec;
     DBoW2::FeatureVector mFeatVec;
-
-    // ORB descriptor, each row associated to a keypoint.
-    cv::Mat mDescriptors, mDescriptorsRight;
 
     // MapPoints associated to keypoints, NULL pointer if no association.
     std::vector<MapPoint*> mvpMapPoints;
 
     // Flag to identify outlier associations.
     std::vector<bool> mvbOutlier;
-
-    // Keypoints are assigned to cells in a grid to reduce matching complexity when projecting MapPoints.
-    static float mfGridElementWidthInv;
-    static float mfGridElementHeightInv;
-    std::vector<std::size_t> mGrid[FRAME_GRID_COLS][FRAME_GRID_ROWS];
 
     // Camera pose.
     cv::Mat mTcw;
@@ -178,14 +216,6 @@ public:
     vector<float> mvInvScaleFactors;
     vector<float> mvLevelSigma2;
     vector<float> mvInvLevelSigma2;
-
-    // Undistorted Image Bounds (computed once).
-    static float mnMinX;
-    static float mnMaxX;
-    static float mnMinY;
-    static float mnMaxY;
-
-    static bool mbInitialComputations;
 
 
 private:

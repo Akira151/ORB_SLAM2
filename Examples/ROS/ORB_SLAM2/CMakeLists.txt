@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.4.6)
 include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
+# for Youcompleteme surpport
+set( CMAKE_EXPORT_COMPILE_COMMANDS "ON" )
+
 rosbuild_init()
 
 IF(NOT ROS_BUILD_TYPE)

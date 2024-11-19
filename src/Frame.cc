@@ -171,6 +171,76 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
 }
 
 
+Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imMask, const cv::Mat &imDepthGS, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, 
+             const float &minMaskValue, const float &maxMaskValue, const float &depthGapRange, const float &maxDepthWeightAll, const float &maxDepthWeightGlass)
+    :mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
+     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth), 
+     mMinMaskValue(minMaskValue), mMaxMaskValue(maxMaskValue), mdepthGapRange(depthGapRange), mMaxDepthWeightAll(maxDepthWeightAll), mMaxDepthWeightGlass(maxDepthWeightGlass)
+{
+    // cout << "Type is: " << typeid(imMask.at<int>(0, 0)).name() << endl;
+    // Frame ID
+    mnId=nNextId++;
+
+    // Scale Level Info
+    mnScaleLevels = mpORBextractorLeft->GetLevels();
+    mfScaleFactor = mpORBextractorLeft->GetScaleFactor();    
+    mfLogScaleFactor = log(mfScaleFactor);
+    mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
+    mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+    mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
+    mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
+
+    // ORB extraction
+    // ExtractORB(0,imGray);
+    ExtractORB_GSD(0,imGray,imMask);
+
+    N = mvKeys.size();
+    // std::cout << "N: " << N << endl;
+
+    if(mvKeys.empty())
+        return;
+
+    UndistortKeyPoints();
+
+    // ComputeStereoFromRGBD(imDepth);
+    ComputeStereoFromRGBD_GSD(imDepth, imMask, imDepthGS);
+
+    mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
+    mvbOutlier = vector<bool>(N,false);
+
+    // This is done only for the first Frame (or after a change in the calibration)
+    if(mbInitialComputations)
+    {
+        ComputeImageBounds(imGray);
+
+        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+
+        fx = K.at<float>(0,0);
+        fy = K.at<float>(1,1);
+        cx = K.at<float>(0,2);
+        cy = K.at<float>(1,2);
+        invfx = 1.0f/fx;
+        invfy = 1.0f/fy;
+
+        mbInitialComputations=false;
+    }
+
+    mb = mbf/fx;
+
+    AssignFeaturesToGrid();
+
+    // Plus
+    // for (const auto &element : mvDepth)
+    //     if (element > 5)
+    //         std::cout << 1 << endl;
+    // size_t i = 0;
+    // for (const auto& kp : mvKeysUn) {
+    //     std::cout << "KeyPoint " << i++ << ": (" << kp.pt.x << ", " << kp.pt.y << ") - Size: " << kp.size << std::endl;
+    // }
+}
+
+
 Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
     :mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
@@ -250,6 +320,14 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
         (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);
     else
         (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
+}
+
+void Frame::ExtractORB_GSD(int flag, const cv::Mat &im, const cv::Mat &gm)
+{
+    if(flag==0)
+        (*mpORBextractorLeft)(im,gm,cv::Mat(),mvKeys,mDescriptors); 
+    else
+        (*mpORBextractorRight)(im,gm,cv::Mat(),mvKeysRight,mDescriptorsRight);
 }
 
 void Frame::SetPose(cv::Mat Tcw)
@@ -419,7 +497,7 @@ void Frame::UndistortKeyPoints()
 
     // Undistort points
     mat=mat.reshape(2);
-    cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
+    cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK); // 进行畸变矫正
     mat=mat.reshape(1);
 
     // Fill undistorted keypoint vector
@@ -492,6 +570,7 @@ void Frame::ComputeStereoMatches()
             vRowIndices[yi].push_back(iR);
     }
 
+    // Step1 + Step2. 粗匹配+精匹配
     // Set limits for search
     const float minZ = mb;
     const float minD = 0;
@@ -639,7 +718,6 @@ void Frame::ComputeStereoMatches()
     }
 }
 
-
 void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
 {
     mvuRight = vector<float>(N,-1);
@@ -655,12 +733,100 @@ void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
 
         const float d = imDepth.at<float>(v,u);
 
+        const float d_floor = imDepth.at<float>(std::floor(v),std::floor(u));
+        if (d != d_floor)
+            std::cout << 1 << endl;
+
         if(d>0)
         {
             mvDepth[i] = d;
             mvuRight[i] = kpU.pt.x-mbf/d;
         }
     }
+}
+
+// Plus
+void Frame::ComputeStereoFromRGBD_GSD(const cv::Mat &imDepth, const cv::Mat &imMask, const cv::Mat &imDepthGS)
+{
+    mvuRight = vector<float>(N,-1);
+    mvDepth = vector<float>(N,-1);
+
+    int count = 0;
+
+    mMaxDepth = ComputeAverageDepth(imDepth, imMask);
+
+    for (int i=0; i<N; i++)
+    {
+        const cv::KeyPoint &kp = mvKeys[i];
+        const cv::KeyPoint &kpU = mvKeysUn[i];
+
+        const float &v = kp.pt.y;
+        const float &u = kp.pt.x;
+
+        // Plus
+        float d;
+        if (kp.class_id == 0)
+        {
+            d = ComputeGlassPointsDepth(imDepth, imDepthGS, static_cast<int>(std::floor(u)), static_cast<int>(std::floor(v)));
+            // std::cout << d << endl;
+            // d = 0.0;
+            if (d > mMaxDepth * mMaxDepthWeightAll)
+                d = 0.0;
+        }
+        else
+            d = imDepth.at<float>(v,u);
+
+        if (d>0)
+        {
+            mvDepth[i] = d;
+            mvuRight[i] = kpU.pt.x-mbf/d;
+        }
+
+        // if (d > 10)
+        //     count++;
+
+        // if (mvDepth[i] > 6.0)
+        //     std::cout << mvDepth[i] << endl;
+    }
+}
+
+float Frame::ComputeGlassPointsDepth(const cv::Mat &imDepth, const cv::Mat &imDepthGS, const int &u, const int &v)
+{
+    float depth = imDepth.at<float>(v,u);
+    float depthGS = imDepthGS.at<float>(v,u);
+    float depthGap = depth / depthGS;
+    // std::cout << depthGap << endl;
+
+    if (depthGap > (1 - mdepthGapRange) && depthGap < (1 + mdepthGapRange) || depth < mMaxDepth * mMaxDepthWeightGlass)
+        return depth;
+    else
+        return 0.0;
+}
+
+float Frame::ComputeAverageDepth(const cv::Mat &imDepth, const cv::Mat &imMask) 
+{
+    float totalDepth = 0.0;
+    float pixelDepth;
+    float averageDepth;
+    int count = 0;
+
+    for (int row = 0; row < imDepth.rows; ++row) 
+        for (int col = 0; col < imDepth.cols; ++col) 
+        {
+            if (imMask.at<uchar>(row, col) < mMaxMaskValue)
+            {
+                pixelDepth = imDepth.at<float>(row, col);
+                if (pixelDepth > 0.01)
+                {
+                    totalDepth += pixelDepth;
+                    count++;
+                }
+            }
+        }
+
+    averageDepth = totalDepth / count;
+    // std::cout << averageDepth << endl;
+    return averageDepth;
 }
 
 cv::Mat Frame::UnprojectStereo(const int &i)

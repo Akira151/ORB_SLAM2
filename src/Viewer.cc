@@ -92,6 +92,9 @@ void Viewer::Run()
     bool bFollow = true;
     bool bLocalizationMode = false;
 
+    // Plus
+    // int i = 1;
+
     while(1)
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -136,6 +139,11 @@ void Viewer::Run()
 
         cv::Mat im = mpFrameDrawer->DrawFrame();
         cv::imshow("ORB-SLAM2: Current Frame",im);
+
+        // Plus 
+        // cv::imwrite("/home/chen/Projects/ORB_SLAM2_pointcloud_map-master/image_output/" + std::to_string(i) + ".jpg", im);
+        // i++;
+
         cv::waitKey(mT);
 
         if(menuReset)

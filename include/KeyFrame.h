@@ -188,9 +188,42 @@ public:
     const int mnMaxY;
     const cv::Mat mK;
 
+    // Plus
+    float mMaxDepth; 
+
 
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:
+    //---------------------------------------------------------------------------------------------
+    std::map<KeyFrame*,int> mConnectedKeyFrameWeights; 
+    std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
+    std::vector<int> mvOrderedWeights; 
+    //---------------------------------------------------------------------------------------------
+
+
+    //---------------------------------------------------------------------------------------------
+    // Spanning Tree and Loop Edges
+    bool mbFirstConnection; 
+    KeyFrame* mpParent; 
+    std::set<KeyFrame*> mspChildrens; 
+    //---------------------------------------------------------------------------------------------
+
+    //---------------------------------------------------------------------------------------------
+    // Bad flags
+    bool mbNotErase; 
+    bool mbToBeErased;
+    bool mbBad;
+    //---------------------------------------------------------------------------------------------
+
+    //---------------------------------------------------------------------------------------------
+    // MapPoints associated to keypoints
+    std::vector<MapPoint*> mvpMapPoints; 
+    //---------------------------------------------------------------------------------------------
+
+    // 回环检测与本质图相关属性
+    //---------------------------------------------------------------------------------------------
+    std::set<KeyFrame*> mspLoopEdges;
+    //---------------------------------------------------------------------------------------------
 
     // SE3 Pose and camera center
     cv::Mat Tcw;
@@ -199,31 +232,13 @@ protected:
 
     cv::Mat Cw; // Stereo middel point. Only for visualization
 
-    // MapPoints associated to keypoints
-    std::vector<MapPoint*> mvpMapPoints;
-
     // BoW
     KeyFrameDatabase* mpKeyFrameDB;
     ORBVocabulary* mpORBvocabulary;
 
     // Grid over the image to speed up feature matching
     std::vector< std::vector <std::vector<size_t> > > mGrid;
-
-    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
-    std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
-    std::vector<int> mvOrderedWeights;
-
-    // Spanning Tree and Loop Edges
-    bool mbFirstConnection;
-    KeyFrame* mpParent;
-    std::set<KeyFrame*> mspChildrens;
-    std::set<KeyFrame*> mspLoopEdges;
-
-    // Bad flags
-    bool mbNotErase;
-    bool mbToBeErased;
-    bool mbBad;    
-
+    
     float mHalfBaseline; // Only for visualization
 
     Map* mpMap;

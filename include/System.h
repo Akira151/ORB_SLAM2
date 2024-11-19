@@ -36,6 +36,11 @@
 #include "ORBVocabulary.h"
 #include "Viewer.h"
 
+// for point cloud viewing
+#include "pointcloudmapping.h"
+
+class PointCloudMapping;
+
 namespace ORB_SLAM2
 {
 
@@ -71,6 +76,14 @@ public:
     // Input depthmap: Float (CV_32F).
     // Returns the camera pose (empty if tracking fails).
     cv::Mat TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp);
+
+    // Plus
+    // Process the given rgbd and mask frame. Depthmap and Maskmap must be registered to the RGB frame.
+    // Input image: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
+    // Input depthmap: Float (CV_32F).
+    // Input maskmap: Int (CV_8U).
+    // Returns the camera pose (empty if tracking fails).
+    cv::Mat TrackRGBD_GSD(const cv::Mat &im, const cv::Mat &depthmap, const cv::Mat &maskmap, const cv::Mat &depthGSmap, const double &timestamp);
 
     // Proccess the given monocular frame
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
@@ -165,7 +178,7 @@ private:
     bool mbReset;
 
     // Change mode flags
-    std::mutex mMutexMode;
+    std::mutex mMutexMode; 
     bool mbActivateLocalizationMode;
     bool mbDeactivateLocalizationMode;
 
@@ -174,6 +187,9 @@ private:
     std::vector<MapPoint*> mTrackedMapPoints;
     std::vector<cv::KeyPoint> mTrackedKeyPointsUn;
     std::mutex mMutexState;
+
+    // point cloud mapping
+    shared_ptr<PointCloudMapping> mpPointCloudMapping;
 };
 
 }// namespace ORB_SLAM

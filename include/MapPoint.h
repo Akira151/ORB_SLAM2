@@ -86,7 +86,7 @@ public:
     static long unsigned int nNextId;
     long int mnFirstKFid;
     long int mnFirstFrame;
-    int nObs;
+    int nObs; 
 
     // Variables used by the tracking
     float mTrackProjX;
@@ -121,7 +121,7 @@ protected:
      std::map<KeyFrame*,size_t> mObservations;
 
      // Mean viewing direction
-     cv::Mat mNormalVector;
+     cv::Mat mNormalVector; 
 
      // Best descriptor to fast matching
      cv::Mat mDescriptor;
@@ -137,9 +137,9 @@ protected:
      bool mbBad;
      MapPoint* mpReplaced;
 
-     // Scale invariance distances
-     float mfMinDistance;
-     float mfMaxDistance;
+     // Scale invariance distances 观测尺度
+     float mfMinDistance; 
+     float mfMaxDistance; 
 
      Map* mpMap;
 

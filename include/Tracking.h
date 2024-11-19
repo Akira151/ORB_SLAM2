@@ -40,6 +40,12 @@
 
 #include <mutex>
 
+// for pointcloud mapping and viewing
+#include "pointcloudmapping.h"
+
+class PointCloudMapping;
+
+
 namespace ORB_SLAM2
 {
 
@@ -51,15 +57,18 @@ class LoopClosing;
 class System;
 
 class Tracking
-{  
+{
 
 public:
-    Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,
+    //Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,
+             //KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
+    Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap, shared_ptr<PointCloudMapping> pPointCloud,
              KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
     cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
+    cv::Mat GrabImageRGBD_GSD(const cv::Mat &imRGB, const cv::Mat &imD, const cv::Mat &imMask, const cv::Mat &imDGS, const double &timestamp); // Plus
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
@@ -94,7 +103,13 @@ public:
 
     // Current Frame
     Frame mCurrentFrame;
+    cv::Mat mImRGB;
     cv::Mat mImGray;
+    cv::Mat mImDepth; // adding mImDepth member to realize pointcloud view
+
+    // Plus
+    cv::Mat mImMask; // for receiving mask image
+    cv::Mat mImDepthGS;
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -169,10 +184,10 @@ protected:
     KeyFrame* mpReferenceKF;
     std::vector<KeyFrame*> mvpLocalKeyFrames;
     std::vector<MapPoint*> mvpLocalMapPoints;
-    
+
     // System
     System* mpSystem;
-    
+
     //Drawers
     Viewer* mpViewer;
     FrameDrawer* mpFrameDrawer;
@@ -195,6 +210,12 @@ protected:
     // and inserted from just one frame. Far points requiere a match in two keyframes.
     float mThDepth;
 
+    float minMaskValue; 
+    float maxMaskValue; 
+    float depthGapRange;
+    float maxDepthWeightAll;
+    float maxDepthWeightGlass;
+
     // For RGB-D inputs only. For some datasets (e.g. TUM) the depthmap values are scaled.
     float mDepthMapFactor;
 
@@ -214,6 +235,9 @@ protected:
     bool mbRGB;
 
     list<MapPoint*> mlpTemporalPoints;
+
+    // for point cloud viewing
+    shared_ptr<PointCloudMapping> mpPointCloudMapping;
 };
 
 } //namespace ORB_SLAM

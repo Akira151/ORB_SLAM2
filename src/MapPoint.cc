@@ -73,7 +73,7 @@ MapPoint::MapPoint(const cv::Mat &Pos, Map* pMap, Frame* pFrame, const int &idxF
 void MapPoint::SetWorldPos(const cv::Mat &Pos)
 {
     unique_lock<mutex> lock2(mGlobalMutex);
-    unique_lock<mutex> lock(mMutexPos);
+    unique_lock<mutex> lock(mMutexPos); // mMutexPos的锁
     Pos.copyTo(mWorldPos);
 }
 
@@ -98,8 +98,10 @@ KeyFrame* MapPoint::GetReferenceKeyFrame()
 void MapPoint::AddObservation(KeyFrame* pKF, size_t idx)
 {
     unique_lock<mutex> lock(mMutexFeatures);
+
     if(mObservations.count(pKF))
         return;
+    
     mObservations[pKF]=idx;
 
     if(pKF->mvuRight[idx]>=0)
@@ -113,6 +115,7 @@ void MapPoint::EraseObservation(KeyFrame* pKF)
     bool bBad=false;
     {
         unique_lock<mutex> lock(mMutexFeatures);
+
         if(mObservations.count(pKF))
         {
             int idx = mObservations[pKF];
@@ -136,6 +139,7 @@ void MapPoint::EraseObservation(KeyFrame* pKF)
         SetBadFlag();
 }
 
+// mObservations的get方法
 map<KeyFrame*, size_t> MapPoint::GetObservations()
 {
     unique_lock<mutex> lock(mMutexFeatures);
@@ -158,6 +162,7 @@ void MapPoint::SetBadFlag()
         obs = mObservations;
         mObservations.clear();
     }
+
     for(map<KeyFrame*,size_t>::iterator mit=obs.begin(), mend=obs.end(); mit!=mend; mit++)
     {
         KeyFrame* pKF = mit->first;
@@ -329,6 +334,7 @@ bool MapPoint::IsInKeyFrame(KeyFrame *pKF)
 
 void MapPoint::UpdateNormalAndDepth()
 {
+
     map<KeyFrame*,size_t> observations;
     KeyFrame* pRefKF;
     cv::Mat Pos;
@@ -415,7 +421,4 @@ int MapPoint::PredictScale(const float &currentDist, Frame* pF)
 
     return nScale;
 }
-
-
-
-} //namespace ORB_SLAM
+}

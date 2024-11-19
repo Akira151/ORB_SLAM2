@@ -48,8 +48,9 @@ public:
     
     enum {HARRIS_SCORE=0, FAST_SCORE=1 };
 
+    // Plus: 增加minMaskValue
     ORBextractor(int nfeatures, float scaleFactor, int nlevels,
-                 int iniThFAST, int minThFAST);
+                 int iniThFAST, int minThFAST, float minMaskValue);
 
     ~ORBextractor(){}
 
@@ -57,6 +58,11 @@ public:
     // ORB are dispersed on the image using an octree.
     // Mask is ignored in the current implementation.
     void operator()( cv::InputArray image, cv::InputArray mask,
+      std::vector<cv::KeyPoint>& keypoints,
+      cv::OutputArray descriptors);
+
+    // Plus
+    void operator()( cv::InputArray image, cv::Mat glass_mask, cv::InputArray mask,
       std::vector<cv::KeyPoint>& keypoints,
       cv::OutputArray descriptors);
 
@@ -88,17 +94,26 @@ protected:
 
     void ComputePyramid(cv::Mat image);
     void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);    
+    // Plus
+    void ComputeKeyPointsOctTree_GSD(std::vector<std::vector<cv::KeyPoint> >& allKeypoints, cv::Mat& _glass_mask);    
+
     std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
                                            const int &maxX, const int &minY, const int &maxY, const int &nFeatures, const int &level);
 
     void ComputeKeyPointsOld(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);
     std::vector<cv::Point> pattern;
 
+    // Plus
+    void ComputeKeyPointsGlass(std::vector<cv::KeyPoint>& keypoints, cv::Mat& glass_mask);
+    template <typename Type>
+    float FloatPointsInterpolate(cv::Mat& image, float x, float y);
+
     int nfeatures;
     double scaleFactor;
     int nlevels;
     int iniThFAST;
     int minThFAST;
+    float minMaskValue;
 
     std::vector<int> mnFeaturesPerLevel;
 

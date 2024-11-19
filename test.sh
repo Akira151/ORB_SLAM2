@@ -1,0 +1,1 @@
+./bin/rgbd_tum_GSD Vocabulary/ORBvoc.bin Examples/RGB-D/D435_D.yaml /media/wzq/c02ce62b-e1fc-4903-8cf8-118ced742b2b/GS_RGB-D/corridor_chair_day/corridor_chair_day/ /media/wzq/c02ce62b-e1fc-4903-8cf8-118ced742b2b/GS_RGB-D/corridor_chair_day/corridor_chair_day/associations.txt

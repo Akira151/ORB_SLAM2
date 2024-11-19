@@ -18,6 +18,8 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iostream> // Plus
+
 #include "FrameDrawer.h"
 #include "Tracking.h"
 
@@ -92,6 +94,9 @@ cv::Mat FrameDrawer::DrawFrame()
         mnTrackedVO=0;
         const float r = 5;
         const int n = vCurrentKeys.size();
+        // std::cout << "n: " << n << endl; // Plus
+
+        cv::Scalar mScalar; // Plus
         for(int i=0;i<n;i++)
         {
             if(vbVO[i] || vbMap[i])
@@ -102,15 +107,32 @@ cv::Mat FrameDrawer::DrawFrame()
                 pt2.x=vCurrentKeys[i].pt.x+r;
                 pt2.y=vCurrentKeys[i].pt.y+r;
 
+                // Plus
+                if(vCurrentKeys[i].class_id == 0)
+                    mScalar = cv::Scalar(0,255,255);
+                else
+                    mScalar = cv::Scalar(0,255,0);
+
                 // This is a match to a MapPoint in the map
                 if(vbMap[i])
                 {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    // cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
+                    // cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    // mnTracked++;
+
+                    // Plus
+                    // std::cout << vCurrentKeys[i].class_id << endl;
+                    cv::rectangle(im,pt1,pt2,mScalar);
+                    cv::circle(im,vCurrentKeys[i].pt,2,mScalar,-1);
                     mnTracked++;
                 }
                 else // This is match to a "visual odometry" MapPoint created in the last frame
                 {
+                    // cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+                    // cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
+                    // mnTrackedVO++;
+
+                    // Plus
                     cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
                     cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
                     mnTrackedVO++;
@@ -118,6 +140,10 @@ cv::Mat FrameDrawer::DrawFrame()
             }
         }
     }
+
+    // Plus
+    // cv::imwrite("/home/chen/Projects/ORB_SLAM2_pointcloud_map-master/image_output/" + std::to_string(i) + ".jpg", im);
+    // i++;
 
     cv::Mat imWithInfo;
     DrawTextInfo(im,state, imWithInfo);

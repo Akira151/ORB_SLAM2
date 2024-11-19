@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     vector<string> vstrImageFilenamesRGB;
     vector<string> vstrImageFilenamesD;
     vector<double> vTimestamps;
-    string strAssociationFilename = string(argv[4]);
+    string strAssociationFilename = string(argv[4]); // argv[4] : path_to_association
     LoadImages(strAssociationFilename, vstrImageFilenamesRGB, vstrImageFilenamesD, vTimestamps);
 
     // Check consistency in the number of images and depthmaps
@@ -62,6 +62,8 @@ int main(int argc, char **argv)
     }
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
+    // argv[1] : path_to_settings
+    // argv[2] : path_to_sequence
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::RGBD,true);
 
     // Vector for tracking time statistics
@@ -134,7 +136,7 @@ int main(int argc, char **argv)
 
     // Save camera trajectory
     SLAM.SaveTrajectoryTUM("CameraTrajectory.txt");
-    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");   
+    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
 
     return 0;
 }
@@ -154,6 +156,7 @@ void LoadImages(const string &strAssociationFilename, vector<string> &vstrImageF
             ss << s;
             double t;
             string sRGB, sD;
+            // UNKNOWN=> cannot understand the >> operator
             ss >> t;
             vTimestamps.push_back(t);
             ss >> sRGB;
